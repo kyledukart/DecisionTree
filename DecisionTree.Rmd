@@ -1,0 +1,100 @@
+---
+title: "Assignment5"
+author: "Kyle Dukart"
+date: "March 1, 2019"
+output: html_document
+---
+
+```{r setup1, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+Using the OneR library and credit data of loans obtained from a credit agency in Germany.
+
+The credit dataset includes 1,000 examples on loans, plus a set of numeric and nominal features indicating the characteristics of the loan and the loan applicant.
+
+```{r setup}
+library(OneR)
+creditdata <-read.csv("C:/Users/Kyle/Desktop/rfiles/credit.csv")
+```
+
+## Exploring the data
+
+This dataset contains 1000 examples with 16 features each, as well as a target variable of "default".  The data shows that 30% of the loans went into default.
+```{r explore}
+str(creditdata)
+summary(creditdata$default)
+```
+
+## Random sample
+
+This data is ordered chronologically, so we must take a random sample to train the data, while setting aside another set of data for testing.  I have chosen 900 random examples as training data, and the remaining 100 examples for testing data.
+
+``` {r randomsample}
+set.seed(123)
+train_sample <- sample(1000,900)
+credit_train <- creditdata[train_sample,]
+credit_test <- creditdata[-train_sample,]
+#test_data <- credit_test$default
+credit_test <- subset( credit_test, select = -default )
+#credit_train <- subset( credit_train, select = -default )
+```
+
+## Training the model
+
+Any numerical features must changed to categorical features, so we must bin these features using optbin().  Our examination of the features shows that all the numerical features appear to be distributed normally, so no other standardization should be necessary.  Then we build our model using the OneR algorithm.
+
+``` {r train}
+data_train <- optbin(credit_train, method = "infogain")
+model <- OneR(data_train, verbose = TRUE)
+```
+
+## Explanation of the OneR algorithm
+
+OneR stands for "One Rule". The algorithm generates one rule ("rules" being analagous to nodes in a decision tree) for each feature that can be used to make a prediction.  It then compares each of these rules and chooses the rule with the best accuracy as its one rule.  
+
+To compare the predictive value of each feature, the algorithm generates a frequency table for each feature.  For each of these frequency tables, the algorithm counts how many times each value of the target variable ("default") appears for each value of the feature. It then counts which value of the target variable appears the most (in this example, default=true or default=false). Whichever value of the target variable appears most often becomes the answer to the rule generated for this feature. This process is repeated for each value, or bin, of this feature.
+
+To illustrate this process, we can examine the frequency table for the feature credit_history:
+
+``` {freqtableexample}
+default critical  good perfect poor very good Sum
+    no       223   327      12   53        18 633
+    yes       46   151      23   26        21 267
+    Sum      269   478      35   79        39 900
+```
+    
+The algorithm will look at each value, or bin, for the feature credit_history.  For the "critical"" bin, there are 223 examples where default=no, and 46 examples where default=yes.  Since "default=no" appears with more frequency, the algorithm concludes "If credit_history=critical, default = no".  Repeating this process for each bin, the result is a set of if-then statements, one for each bin of the feature:
+
+``` {ruleexample}
+If credit_history = critical, default = no
+If credit_history = good, default = no
+If credit_history = perfect, default = yes
+If credit_history = poor, default = no
+If credit_history = very good, default = yes
+```
+
+This set of if-then statements becomes the "one rule" for the feature credit_history.
+
+The algorithm repeats this process of analyzing a frequency table for each feature, generating one rule per feature.  It then tests the accuracy of each of these rules, choosing the single rule that has the best accuracy.  This single rule becomes the resulting model for the algorithm.  In this specific example, the feature credit_history was shown to have the best predictive accuracy, so it has been chosen as the one rule for the model.
+
+## Examine the model
+
+We can examine the details of the model that was built using the OneR algorithm.  Using the model to make predictions on the test data, we can see the model has a 70% accuracy.  We can see that the feature the algorithm is using as its "one rule" is credit_history.
+
+``` {r examine}
+summary(model)
+plot(model)
+```
+
+## Testing the model
+``` {r test}
+prediction <- predict(model, credit_test)
+eval_model(prediction, creditdata[-train_sample,])
+```
+
+## Conclusion
+
+The OneR algorithm can be viewed as choosing the most accurate or most predictive node in a decision tree.  This makes OneR less accurate than a decision tree algorithm, but much simpler and very easy for a human to interpret quickly without the use of a computer.
